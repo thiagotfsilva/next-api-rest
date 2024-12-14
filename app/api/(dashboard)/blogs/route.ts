@@ -10,6 +10,11 @@ export const GET = async (request: Request) => {
     const { searchParams } =  new URL(request.url);
     const userId = searchParams.get("userId");
     const categoryId = searchParams.get("categoryId");
+    const searchKeyWord = searchParams.get("keywords");
+    const startDate = searchParams.get("startDate");
+    const endDate = searchParams.get("endDate");
+    const page = searchParams.get("page");
+    const limit = searchParams.get("limit");
 
     if (!userId || !Types.ObjectId.isValid(userId)) {
       return new NextResponse(
@@ -43,12 +48,47 @@ export const GET = async (request: Request) => {
       );
     }
 
-    const filter = {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const filter: any = {
       user: new Types.ObjectId(userId),
       category: new Types.ObjectId(categoryId)
     }
 
-    const blogs = await Blog.find(filter);
+    if (searchKeyWord) {
+      filter.$or = [
+        {
+          title: { $regex: searchKeyWord, $options: "i" },
+        },
+        {
+          description: { $regex: searchKeyWord, $options: "i" },
+        },
+      ];
+    }
+
+    if (startDate && endDate) {
+      filter.createdAt = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate),
+      };
+    } else if (startDate) {
+      filter.createdAt = {
+        $gte: new Date(startDate),
+      };
+    } else if (endDate) {
+      filter.createdAt = {
+        $lte: new Date(endDate),
+      };
+    }
+
+    const pageSanitize = page ? parseInt(page) : 1;
+    const limitSanitize = limit ? parseInt(limit) : 10;
+    const skip = (pageSanitize - 1) * limitSanitize;
+
+    const blogs = await Blog
+      .find(filter)
+      .sort({ createdAt: "asc"})
+      .skip(skip)
+      .limit(limitSanitize);
 
     return new NextResponse(
       JSON.stringify({ blogs }),
